@@ -6,6 +6,22 @@ use std::num::NonZeroU64;
 use tempfile::tempdir;
 
 #[test]
+fn runtime_internal_metadata_opt_in_is_not_serialized_or_configurable() {
+    let trusted = ModelProviderInfo {
+        include_internal_metadata: true,
+        ..Default::default()
+    };
+    assert_eq!(
+        toml::to_string(&trusted).unwrap(),
+        toml::to_string(&ModelProviderInfo::default()).unwrap(),
+    );
+    assert_eq!(
+        toml::from_str::<ModelProviderInfo>("include_internal_metadata = true").unwrap(),
+        ModelProviderInfo::default(),
+    );
+}
+
+#[test]
 fn test_api_provider_applies_current_managed_residency() {
     let info = ModelProviderInfo {
         http_headers: Some(maplit::hashmap! {
@@ -80,6 +96,8 @@ base_url = "http://localhost:11434/v1"
         requires_openai_auth: false,
         supports_websockets: false,
         supports_standalone_web_search: false,
+        capabilities: None,
+        include_internal_metadata: false,
     };
 
     let provider: ModelProviderInfo = toml::from_str(azure_provider_toml).unwrap();
@@ -117,6 +135,8 @@ query_params = { api-version = "2025-04-01-preview" }
         requires_openai_auth: false,
         supports_websockets: false,
         supports_standalone_web_search: false,
+        capabilities: None,
+        include_internal_metadata: false,
     };
 
     let provider: ModelProviderInfo = toml::from_str(azure_provider_toml).unwrap();
@@ -158,6 +178,8 @@ supports_standalone_web_search = true
         requires_openai_auth: false,
         supports_websockets: false,
         supports_standalone_web_search: true,
+        capabilities: None,
+        include_internal_metadata: false,
     };
 
     let provider: ModelProviderInfo = toml::from_str(azure_provider_toml).unwrap();
@@ -346,6 +368,8 @@ fn test_create_amazon_bedrock_provider() {
             requires_openai_auth: false,
             supports_websockets: false,
             supports_standalone_web_search: false,
+            capabilities: None,
+            include_internal_metadata: false,
         }
     );
 }

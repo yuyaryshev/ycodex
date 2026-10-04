@@ -82,7 +82,6 @@ use pretty_assertions::assert_eq;
 use serde_json::Value;
 use serde_json::json;
 use std::fs;
-use std::os::unix::fs::PermissionsExt;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
@@ -1719,6 +1718,18 @@ async fn guardian_session_is_reused_for_consecutive_tool_reviews_without_prewarm
     }
     let first_guardian_request = guardian_requests[0].body_json();
     let second_guardian_request = guardian_requests[2].body_json();
+    let second_input = guardian_requests[2]
+        .message_input_text_groups("user")
+        .last()
+        .expect("second review input")
+        .concat();
+    assert_eq!(
+        second_input
+            .matches("run the second command that requires Guardian review")
+            .count(),
+        1
+    );
+    assert!(!second_input.contains("run the first command that requires Guardian review"));
     let first_parent_request = requests[0].body_json();
     let second_parent_request = requests[4].body_json();
     let first_parent_turn_id = first_parent_request["client_metadata"]["turn_id"]
@@ -2526,14 +2537,13 @@ async fn guardian_review_session_does_not_inherit_legacy_notify() -> Result<()> 
 
     let notify_dir = TempDir::new()?;
     let notify_script = notify_dir.path().join("notify.sh");
-    fs::write(
+    codex_utils_cargo_bin::write_executable(
         &notify_script,
         r#"#!/bin/bash
 set -e
 payload_path="$(dirname "${0}")/notify.jsonl"
 printf '%s\n' "${@: -1}" >> "${payload_path}""#,
     )?;
-    fs::set_permissions(&notify_script, fs::Permissions::from_mode(0o755))?;
     let notify_file = notify_dir.path().join("notify.jsonl");
     let notify_script_str = notify_script.to_str().unwrap().to_string();
     let sandbox_policy_for_config = sandbox_policy.clone();

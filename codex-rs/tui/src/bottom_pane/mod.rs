@@ -2,7 +2,8 @@
 //!
 //! The pane owns the [`ChatComposer`] (editable prompt input) and a stack of transient
 //! [`BottomPaneView`]s (popups/modals) that temporarily replace the composer for focused
-//! interactions like selection lists.
+//! interactions like selection lists. Centered views retain earlier views as a backdrop,
+//! while input remains routed exclusively to the top of the stack.
 //!
 //! Input routing is layered: `BottomPane` decides which local surface receives a key (view vs
 //! composer), while higher-level intent such as "interrupt" or "quit" is decided by the parent
@@ -47,6 +48,7 @@ use crate::terminal_palette::effective_stdout_color_level;
 use crate::tui::FrameRequester;
 pub(crate) use bottom_pane_view::BottomPaneView;
 pub(crate) use bottom_pane_view::ViewCompletion;
+pub(crate) use bottom_pane_view::ViewPresentation;
 use codex_app_server_protocol::SkillMetadata;
 use codex_app_server_protocol::ToolRequestUserInputParams;
 use codex_features::Features;
@@ -77,6 +79,8 @@ mod empty_state_policy;
 mod hook_status;
 mod mcp_server_elicitation;
 mod multi_select_picker;
+pub(crate) use multi_select_picker::MultiSelectItem;
+pub(crate) use multi_select_picker::MultiSelectPicker;
 #[cfg(test)]
 #[path = "questions_tests.rs"]
 mod question_tests;
@@ -117,6 +121,9 @@ pub(crate) use voice_strip::VoiceStripState;
 mod bottom_pane_view;
 mod composer_gap;
 mod effort_ignition;
+mod view_stack;
+pub(crate) use view_stack::CenteredView;
+pub(crate) use view_stack::DialogOverlay;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct LocalImageAttachment {
@@ -282,6 +289,8 @@ pub(crate) struct BottomPane {
     /// Stack of views displayed instead of the composer (e.g. popups/modals).
     view_stack: Vec<Box<dyn BottomPaneView>>,
     warnings_view: Option<warnings_view::WarningsView>,
+    /// A keep press can close the viewer; its remaining repeats must not edit the draft.
+    pub(crate) suppress_warning_keep_repeat: bool,
     pub(crate) questions: Option<Box<AsyncQuestions>>,
     delayed_approval_requests: VecDeque<DelayedApprovalRequest>,
     last_composer_activity_at: Option<Instant>,
@@ -368,6 +377,7 @@ impl BottomPane {
             composer,
             view_stack: Vec::new(),
             warnings_view: None,
+            suppress_warning_keep_repeat: false,
             questions: None,
             delayed_approval_requests: VecDeque::new(),
             last_composer_activity_at: None,
@@ -443,6 +453,32 @@ impl BottomPane {
     pub(crate) fn set_agents_navigation_enabled(&mut self, enabled: bool) {
         self.composer.set_agents_navigation_enabled(enabled);
         self.request_redraw();
+    }
+
+    pub(crate) fn agents_navigation_key_available(&self) -> bool {
+        let left = KeyEvent::from(KeyCode::Left);
+        self.composer.agents_navigation_key_available()
+            && !crate::keymap::keymap_action_ids()
+                .filter(|action| {
+                    matches!(
+                        action.context,
+                        KeymapContext::Global | KeymapContext::Chat | KeymapContext::Voice
+                    )
+                })
+                .any(|action| {
+                    crate::keymap::bindings_for_action(
+                        &self.keymap,
+                        action.context.config_name(),
+                        action.action,
+                    )
+                    .is_some_and(|bindings| bindings.is_pressed(left))
+                })
+            && !self.keymap.chords.bindings.iter().any(|binding| {
+                matches!(
+                    binding.action.context,
+                    KeymapContext::Global | KeymapContext::Chat | KeymapContext::Voice
+                ) && binding.chord.prefix.is_press(left)
+            })
     }
 
     pub(crate) fn set_task_mentions_enabled(&mut self, enabled: bool) {
@@ -575,6 +611,11 @@ impl BottomPane {
 
     pub fn set_service_tier_commands_enabled(&mut self, enabled: bool) {
         self.composer.set_service_tier_commands_enabled(enabled);
+        self.request_redraw();
+    }
+
+    pub fn set_daybreak_command_description(&mut self, description: Option<&'static str>) {
+        self.composer.set_daybreak_command_description(description);
         self.request_redraw();
     }
 
@@ -792,8 +833,11 @@ impl BottomPane {
                 .warnings_view
                 .as_mut()
                 .is_some_and(|view| view.handle_key(key_event))
+                && let Some(view) = self.warnings_view.take()
             {
-                self.warnings_view = None;
+                self.suppress_warning_keep_repeat =
+                    key_hint::plain(KeyCode::Char('k')).is_press(key_event);
+                view.close();
             }
             self.request_redraw();
             return InputResult::None;
@@ -915,7 +959,9 @@ impl BottomPane {
     /// quit/interrupt state machine and uses the result to decide what happens next.
     pub(crate) fn on_ctrl_c(&mut self) -> CancellationEvent {
         if self.warnings_active() {
-            self.warnings_view = None;
+            if let Some(view) = self.warnings_view.take() {
+                view.close();
+            }
             self.request_redraw();
             return CancellationEvent::Handled;
         }
@@ -1113,9 +1159,8 @@ impl BottomPane {
         self.composer.current_text()
     }
 
-    #[cfg(test)]
     pub(crate) fn composer_cursor(&self) -> usize {
-        self.composer.cursor()
+        self.composer.current_cursor()
     }
 
     #[cfg(test)]
@@ -1272,30 +1317,6 @@ impl BottomPane {
     }
 
     // esc_backtrack_hint_visible removed; hints are controlled internally.
-
-    pub(crate) fn set_prompt_suggestion(
-        &mut self,
-        request: crate::prompt_suggestions::SuggestionRequest,
-    ) {
-        self.composer.set_prompt_suggestion(request);
-    }
-
-    pub(crate) fn has_prompt_suggestion(&self) -> bool {
-        self.composer.has_prompt_suggestion()
-    }
-
-    pub(crate) fn clear_prompt_suggestion(&mut self) {
-        self.composer.clear_prompt_suggestion();
-    }
-
-    pub(crate) fn apply_prompt_suggestion(
-        &mut self,
-        request: &crate::prompt_suggestions::SuggestionRequest,
-        text: Option<String>,
-    ) {
-        self.composer.apply_prompt_suggestion(request, text);
-        self.request_redraw();
-    }
 
     pub fn set_task_running(&mut self, running: bool) {
         let was_running = self.is_task_running;
@@ -1714,6 +1735,11 @@ impl BottomPane {
                 .is_some_and(bottom_pane_view::BottomPaneView::terminal_title_requires_action)
     }
 
+    pub(crate) fn has_centered_view(&self) -> bool {
+        self.active_view()
+            .is_some_and(|view| view.presentation() == ViewPresentation::Centered)
+    }
+
     pub(crate) fn has_active_view(&self) -> bool {
         self.warnings_view.is_some() || self.has_active_modal()
     }
@@ -1787,6 +1813,10 @@ impl BottomPane {
             return None;
         }
         self.composer.copy_selection(event, copy)
+    }
+
+    pub(crate) fn can_paste_on_right_click(&self) -> bool {
+        self.no_modal_or_popup_active() && self.composer.can_paste_on_right_click()
     }
 
     pub(crate) fn prepare_composer_mouse(&mut self, event: crossterm::event::MouseEvent) -> bool {
@@ -1901,6 +1931,20 @@ impl BottomPane {
         if let Some(tool_suggestion) = request.tool_suggestion()
             && let Some(install_url) = tool_suggestion.install_url.clone()
         {
+            let Some(install_url) = app_link_view::validate_external_url(
+                &install_url,
+                /*require_chatgpt_host*/ false,
+            ) else {
+                self.app_event_tx.resolve_elicitation(
+                    request.thread_id(),
+                    request.server_name().to_string(),
+                    request.request_id().clone(),
+                    codex_app_server_protocol::McpServerElicitationAction::Decline,
+                    /*content*/ None,
+                    /*meta*/ None,
+                );
+                return;
+            };
             let suggestion_type = match tool_suggestion.suggest_type {
                 mcp_server_elicitation::ToolSuggestionType::Install => {
                     AppLinkSuggestionType::Install
@@ -1930,7 +1974,7 @@ impl BottomPane {
                             "external actions use URL mode elicitation, not tool suggestion forms"
                         ),
                     },
-                    url: install_url,
+                    url: install_url.into(),
                     is_installed,
                     is_enabled: false,
                     suggest_reason: Some(tool_suggestion.suggest_reason.clone()),
@@ -2136,7 +2180,35 @@ impl BottomPane {
 
     pub(crate) fn as_renderable_with_options<'a>(
         &'a self,
+        options: ComposerRenderOptions<'a>,
+    ) -> RenderableItem<'a> {
+        self.renderable_for_views(options, &self.view_stack)
+    }
+
+    pub(crate) fn centered_dialog(&self) -> Option<CenteredView<'_>> {
+        self.active_view()
+            .filter(|view| {
+                !self.warnings_active() && view.presentation() == ViewPresentation::Centered
+            })
+            .map(CenteredView)
+    }
+
+    pub(crate) fn backdrop_with_options<'a>(
+        &'a self,
+        options: ComposerRenderOptions<'a>,
+    ) -> RenderableItem<'a> {
+        let views = if self.centered_dialog().is_some() {
+            &self.view_stack[..self.view_stack.len() - 1]
+        } else {
+            &self.view_stack
+        };
+        self.renderable_for_views(options, views)
+    }
+
+    fn renderable_for_views<'a>(
+        &'a self,
         mut options: ComposerRenderOptions<'a>,
+        views: &'a [Box<dyn BottomPaneView>],
     ) -> RenderableItem<'a> {
         if self.warnings_active()
             && let Some(warnings) = &self.warnings_view
@@ -2148,8 +2220,12 @@ impl BottomPane {
         {
             banner.visible.set(false);
         }
-        if let Some(view) = self.active_view() {
-            RenderableItem::Borrowed(view)
+        if let Some(view) = views.last() {
+            if view.presentation() == ViewPresentation::Centered {
+                RenderableItem::Owned(Box::new(view_stack::ViewStack(views)))
+            } else {
+                RenderableItem::Borrowed(view.as_ref())
+            }
         } else {
             let mut flex = FlexRenderable::new();
             if let Some(banner) = self
@@ -2197,6 +2273,12 @@ impl BottomPane {
                 || self.hook_status_message.is_some()
                 || !self.unified_exec_footer.is_empty();
             let has_inline_previews = has_pending_thread_approvals || has_pending_input;
+            if !has_inline_previews
+                && self.status_widget().is_some()
+                && let Some(tip) = options.working_tip
+            {
+                flex.push(/*flex*/ 1, RenderableItem::Borrowed(tip));
+            }
             if has_inline_previews && has_status_or_footer {
                 flex.push(/*flex*/ 0, RenderableItem::Owned("".into()));
             }
@@ -2260,7 +2342,8 @@ impl BottomPane {
             flex2.push(/*flex*/ 1, RenderableItem::Owned(above_composer));
             let composer: RenderableItem<'_> = if let Some(questions) = question_editor {
                 RenderableItem::Borrowed(questions.as_ref())
-            } else if options.textarea_right_reserve == 0
+            } else if options.max_height.is_none()
+                && options.textarea_right_reserve == 0
                 && options.warning_count == 0
                 && options.footer.is_none()
                 && !options.separate_status_line
@@ -2343,6 +2426,7 @@ impl Renderable for ChatComposerPresentation<'_> {
     fn desired_height(&self, width: u16) -> u16 {
         self.composer
             .desired_height_with_options(width, self.options)
+            .min(self.options.max_height.unwrap_or(u16::MAX))
     }
 
     fn cursor_pos(&self, area: Rect) -> Option<(u16, u16)> {
@@ -2616,7 +2700,7 @@ mod tests {
             assert_eq!(
                 selected,
                 if action == "view_usage" {
-                    "https://chatgpt.com/codex/settings/usage"
+                    "https://chatgpt.com/settings/usage"
                 } else {
                     "Credits"
                 }
@@ -2808,14 +2892,14 @@ mod tests {
         ] {
             let mut pane = test_pane(tx.clone());
             match source {
-                "warning open" => pane.show_warnings(Vec::new()),
+                "warning open" => pane.show_warnings(Vec::new(), Default::default()),
                 "warning navigation" => {
-                    pane.show_warnings(Vec::new());
+                    pane.show_warnings(Vec::new(), Default::default());
                     pane.last_composer_activity_at = None;
                     pane.handle_key_event(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
                 }
                 "warning paste" => {
-                    pane.show_warnings(Vec::new());
+                    pane.show_warnings(Vec::new(), Default::default());
                     pane.last_composer_activity_at = None;
                     pane.handle_paste("query".into());
                 }

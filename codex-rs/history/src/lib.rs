@@ -61,6 +61,26 @@ pub struct ResponseItemEnvelope {
 ///
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq, Eq, JsonSchema)]
 pub struct CodexHarnessMetadata {
+    /// Complete retained records actually delivered by this Guardian message. Host-only.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub guardian_sources: Vec<RetainedSource>,
+
+    /// Completed sync reviews delivered by this complete Guardian message. Host-only.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub guardian_review_ids: Vec<codex_protocol::ResponseItemId>,
+
+    /// This complete message delivered the meaning of retained source-order labels.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub guardian_source_order_guidance: bool,
+
+    /// Section-scoped omission delivery proof; None means unknown, not complete.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub guardian_retained_omissions: Option<GuardianRetainedOmissions>,
+
+    /// Original retained evidence represented by this exact history item.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub retained_source: Option<RetainedSource>,
+
     /// Whether a developer message was supplied by an app-server client.
     #[serde(default)]
     pub client_authored: bool,
@@ -128,6 +148,21 @@ where
             sources: Vec::new(),
         }
     })))
+}
+
+impl CodexHarnessMetadata {
+    /// Shortened messages no longer prove complete instruction or review delivery.
+    pub fn mark_retained_sources_incomplete(&mut self) {
+        self.guardian_review_ids.clear();
+        self.guardian_source_order_guidance = false;
+        self.guardian_retained_omissions = None;
+        if let Some(source) = &mut self.retained_source {
+            source.complete = false;
+        }
+        for source in &mut self.guardian_sources {
+            source.complete = false;
+        }
+    }
 }
 
 impl ResponseItemEnvelope {
@@ -236,12 +271,16 @@ pub use retained_context::RetainedContextEntry;
 pub use retained_context::RetainedContextEvent;
 pub use retained_context::RetainedContextOrder;
 pub use retained_context::RetainedInputSource;
+pub use retained_context::RetainedSource;
+pub use retained_context::RetainedSourceId;
+pub use retained_context::RetainedSourceRole;
 pub use retained_context::RetainedUserMessage;
 pub use retained_context::VerifiedAnswer;
 pub use retained_context::VerifiedQuestionAnswer;
 mod rollout_payload;
 
 pub use guardian_history::GuardianHistoryCheckpoint;
+pub use guardian_history::GuardianRetainedOmissions;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct CompactedItem {
@@ -331,6 +370,9 @@ pub struct RolloutLine {
 pub struct ResumedHistory {
     pub conversation_id: ThreadId,
     pub history: Arc<Vec<RolloutItem>>,
+    /// Store-issued revision for this exact snapshot; clear it when modifying the history.
+    #[serde(skip)]
+    pub history_revision: Option<String>,
     pub rollout_path: Option<PathBuf>,
 }
 
@@ -378,31 +420,6 @@ impl InitialHistory {
             Self::New | Self::Cleared => &[],
             Self::Resumed(resumed) => &resumed.history,
             Self::Forked(items) => items,
-        }
-    }
-
-    pub fn get_event_msgs(&self) -> Option<Vec<EventMsg>> {
-        match self {
-            Self::New | Self::Cleared => None,
-            Self::Resumed(resumed) => Some(
-                resumed
-                    .history
-                    .iter()
-                    .filter_map(|item| match item {
-                        RolloutItem::EventMsg(event) => Some(event.clone()),
-                        _ => None,
-                    })
-                    .collect(),
-            ),
-            Self::Forked(items) => Some(
-                items
-                    .iter()
-                    .filter_map(|item| match item {
-                        RolloutItem::EventMsg(event) => Some(event.clone()),
-                        _ => None,
-                    })
-                    .collect(),
-            ),
         }
     }
 

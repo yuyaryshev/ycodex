@@ -71,13 +71,13 @@ impl Drop for AccountProfile {
 
 impl AccountProfile {
     fn unload_profile(&mut self) -> Result<()> {
-        if self.profile != 0 {
+        if !self.profile.is_null() {
             let unloaded =
                 unsafe { UnloadUserProfile(self.token.as_raw_handle() as _, self.profile) };
             BOOL(unloaded)
                 .ok()
                 .context("unload managed runtime account profile")?;
-            self.profile = 0;
+            self.profile = std::ptr::null_mut();
         }
         Ok(())
     }
@@ -99,7 +99,7 @@ pub(crate) fn provision(
         SandboxRuntimeAccount::Offline,
         SandboxRuntimeAccount::Online,
     ] {
-        let token = with_owner_impersonation(identity.token.0, || {
+        let token = with_owner_impersonation(identity.token.as_raw_handle(), || {
             let mut pins = Vec::new();
             crate::ipc::pin_existing_ancestors(
                 &sandbox_secrets_dir(&identity.codex_home),
@@ -163,7 +163,8 @@ pub(crate) fn provision(
                     None,
                     DeploymentOptions::None,
                 )?)
-            })?;
+            })
+            .context("start managed runtime package registration")?;
             // As with provisioning, retain the request's resources until Windows finishes.
             // A client timeout or an unreadable status cannot safely release the profile.
             let mut status_error_logged = false;
@@ -193,18 +194,26 @@ pub(crate) fn provision(
                 }
                 std::thread::sleep(Duration::from_millis(50));
             }
-            operation.GetResults()?.ExtendedErrorCode()?.ok()?;
+            operation
+                .GetResults()
+                .and_then(|result| result.ExtendedErrorCode())
+                .and_then(windows::core::HRESULT::ok)
+                .context("finish managed runtime package registration")?;
             ensure!(
-                registered_packages(&profile.user_sid, &family)?.contains(full_name),
+                registered_packages(&profile.user_sid, &family)
+                    .context("verify managed runtime package registration")?
+                    .contains(full_name),
                 "runtime registration completed without the expected package"
             );
         }
-        metadata::grant(identity.token.0, &profile.user_sid, record)?;
+        metadata::grant(identity.token.as_raw_handle(), &profile.user_sid, record)
+            .context("grant managed runtime metadata permissions")?;
         profile.unload_profile()?;
     }
     if !receipt_current {
         record.runtime_mut()?.ready_package = Some(full_name.to_string());
-        crate::installation_record::save_runtime(record)?;
+        crate::installation_record::save_runtime(record)
+            .context("persist completed managed runtime registration")?;
     }
     Ok(())
 }

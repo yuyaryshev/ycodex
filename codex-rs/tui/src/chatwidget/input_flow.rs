@@ -23,9 +23,6 @@ impl ChatWidget {
         input_result: InputResult,
         had_modal_or_popup: bool,
     ) {
-        if !matches!(input_result, InputResult::None) {
-            self.clear_prompt_suggestion();
-        }
         let follow_transcript = match &input_result {
             // Opening settings is not a request to leave the current reading anchor.
             // Inline commands still follow so their output (including usage errors) is visible.
@@ -64,7 +61,7 @@ impl ChatWidget {
                 self.app_event_tx.send(AppEvent::FollowTranscript);
                 let should_submit_now = self.is_session_configured()
                     && !self.is_plan_streaming_in_tui()
-                    && !self.input_queue.suppress_queue_autosend
+                    && !self.input_queue.submissions_paused()
                     && !self.input_queue.rate_limit_recovery_pending
                     && (!self.input_queue.user_turn_pending_start
                         || self.turn_lifecycle.agent_turn_running);
@@ -174,7 +171,7 @@ impl ChatWidget {
         }
         let should_run_now = self.is_session_configured()
             && !self.is_user_turn_pending_or_running()
-            && !self.input_queue.suppress_queue_autosend
+            && !self.input_queue.submissions_paused()
             && !self.input_queue.rate_limit_recovery_pending;
         if action != QueuedInputAction::ParseSlash {
             self.empty_state_animation.borrow_mut().dismiss();
@@ -210,6 +207,7 @@ impl ChatWidget {
                 .push_back(QueuedUserMessage {
                     user_message,
                     action,
+                    delivery: MessageDelivery::Unsent,
                     pending_pastes,
                     source,
                 });
@@ -238,10 +236,12 @@ impl ChatWidget {
     /// If idle and there are queued inputs, submit exactly one to start the next turn.
     pub(crate) fn maybe_send_next_queued_input(&mut self) -> bool {
         if !self.is_session_configured()
+            || self.fork_in_progress
             || self.has_misalignment_policy_violation()
-            || self.input_queue.suppress_queue_autosend
+            || self.input_queue.submissions_paused()
             || self.input_queue.rate_limit_recovery_pending
             || self.input_queue.recovered_queue
+            || self.input_queue.has_unconfirmed_messages()
         {
             return false;
         }
