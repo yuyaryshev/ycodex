@@ -8,6 +8,16 @@ Keeping this fork current is a primary workflow: update to the new upstream revi
 preserve our local patches, and re-verify them before preparing an installation. Do not
 modify the ordinary installed `codex` command unless the user explicitly requests that.
 
+Before every upstream update, fetch the official `main` head and compare it with the
+fork; do not rely on an old `refs/remotes/upstream/main` reference. Update the fork from
+that freshly fetched head before building `ycodex_next`.
+
+The version in upstream source can be `0.0.0` because OpenAI stamps release versions in
+its packaging pipeline. Before building a ycodex package, query the published
+`@openai/codex` npm release version (for example, through the npm registry API), and set
+the ycodex workspace version to `<published-version>+ycodex.<short-build-id>`. Verify
+the resulting executable's `--version` output before packaging and daemon installation.
+
 ## Build-cache discipline
 
 Rust build output under `codex-rs/target/` is disposable and can grow to tens of
