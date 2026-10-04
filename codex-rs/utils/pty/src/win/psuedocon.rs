@@ -49,13 +49,16 @@ use winapi::shared::winerror::HRESULT;
 use winapi::shared::winerror::S_OK;
 use winapi::um::handleapi::*;
 use winapi::um::processthreadsapi::*;
+use winapi::um::winbase::CREATE_NO_WINDOW;
 use winapi::um::winbase::CREATE_UNICODE_ENVIRONMENT;
 use winapi::um::winbase::EXTENDED_STARTUPINFO_PRESENT;
+use winapi::um::winbase::STARTF_USESHOWWINDOW;
 use winapi::um::winbase::STARTF_USESTDHANDLES;
 use winapi::um::winbase::STARTUPINFOEXW;
 use winapi::um::wincon::COORD;
 use winapi::um::winnt::HANDLE;
 use winapi::um::winnt::OSVERSIONINFOW;
+use winapi::um::winuser::SW_HIDE;
 
 pub type HPCON = HANDLE;
 
@@ -171,7 +174,8 @@ impl PsuedoCon {
         let job = Arc::new(JobObject::create()?);
         let mut si: STARTUPINFOEXW = unsafe { mem::zeroed() };
         si.StartupInfo.cb = mem::size_of::<STARTUPINFOEXW>() as u32;
-        si.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
+        si.StartupInfo.dwFlags = STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW;
+        si.StartupInfo.wShowWindow = SW_HIDE as u16;
         si.StartupInfo.hStdInput = INVALID_HANDLE_VALUE;
         si.StartupInfo.hStdOutput = INVALID_HANDLE_VALUE;
         si.StartupInfo.hStdError = INVALID_HANDLE_VALUE;
@@ -196,7 +200,7 @@ impl PsuedoCon {
                 ptr::null_mut(),
                 ptr::null_mut(),
                 0,
-                EXTENDED_STARTUPINFO_PRESENT | CREATE_UNICODE_ENVIRONMENT,
+                EXTENDED_STARTUPINFO_PRESENT | CREATE_NO_WINDOW | CREATE_UNICODE_ENVIRONMENT,
                 env_block.as_mut_ptr() as *mut _,
                 cwd.as_ref().map_or(ptr::null(), std::vec::Vec::as_ptr),
                 &mut si.StartupInfo,

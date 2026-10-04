@@ -1528,6 +1528,17 @@ pub(crate) enum AppEvent {
         enabled: bool,
     },
 
+    /// Open a palette for one persisted default or session color.
+    OpenStyleColorPicker {
+        target: crate::session_styles::StyleTarget,
+    },
+
+    /// Persist one selected default or session color.
+    StyleColorSelected {
+        target: crate::session_styles::StyleTarget,
+        color: Option<(u8, u8, u8)>,
+    },
+
     /// Apply a user-confirmed syntax theme selection.
     SyntaxThemeSelected {
         name: String,

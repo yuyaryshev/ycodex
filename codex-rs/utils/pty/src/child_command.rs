@@ -239,6 +239,15 @@ impl Command {
         job.prepare_suspended_spawn(&mut self.inner);
     }
 
+    /// Prevents Windows from creating a visible console window for this child.
+    #[cfg(windows)]
+    pub fn hide_window(&mut self) -> &mut Self {
+        use winapi::um::winbase::CREATE_NO_WINDOW;
+
+        self.inner.creation_flags(CREATE_NO_WINDOW);
+        self
+    }
+
     /// Reject original inputs that std replaced with a NUL-free placeholder.
     #[cfg(unix)]
     pub(crate) fn validate(&self) -> io::Result<()> {

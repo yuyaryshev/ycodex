@@ -11,6 +11,7 @@ use crate::clipboard_copy::worker::CopyResult;
 pub(crate) enum KeyEventAction {
     None,
     CopyLastResponse(Arc<str>),
+    PasteText,
     PasteImage,
 }
 
@@ -139,6 +140,34 @@ impl ChatWidget {
                 self.quit_shortcut_expires_at = None;
                 self.quit_shortcut_key = None;
             }
+            #[cfg(windows)]
+            KeyEvent {
+                code: KeyCode::Char(c),
+                modifiers,
+                kind: KeyEventKind::Press,
+                ..
+            } if modifiers.contains(KeyModifiers::ALT) && c.eq_ignore_ascii_case(&'v') => {
+                return KeyEventAction::PasteImage;
+            }
+            #[cfg(windows)]
+            KeyEvent {
+                code: KeyCode::Char(c),
+                modifiers,
+                kind: KeyEventKind::Press,
+                ..
+            } if modifiers == KeyModifiers::CONTROL && c.eq_ignore_ascii_case(&'v') => {
+                return KeyEventAction::PasteText;
+            }
+            #[cfg(windows)]
+            KeyEvent {
+                code: KeyCode::Insert,
+                modifiers,
+                kind: KeyEventKind::Press,
+                ..
+            } if modifiers == KeyModifiers::SHIFT => {
+                return KeyEventAction::PasteText;
+            }
+            #[cfg(not(windows))]
             KeyEvent {
                 code: KeyCode::Char(c),
                 modifiers,

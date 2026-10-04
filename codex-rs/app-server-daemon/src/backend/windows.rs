@@ -11,6 +11,8 @@ use std::os::windows::process::CommandExt;
 use std::path::Path;
 use std::process::Command;
 use std::process::Stdio;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 
 use anyhow::Context;
 use anyhow::Result;
@@ -49,7 +51,25 @@ use windows_sys::Win32::System::Threading::PROCESS_TERMINATE;
 use windows_sys::Win32::System::Threading::TerminateProcess;
 use windows_sys::Win32::System::Threading::WaitForSingleObject;
 
+static BYPASS_ELEVATION_CHECK: AtomicBool = AtomicBool::new(false);
+
+/// Allows this process to start the shared daemon from an elevated terminal.
+///
+/// This is deliberately process-local: callers must opt in through the explicit
+/// `--bypass-safety-y` CLI flag for every invocation.
+pub fn enable_bypass_safety_y() {
+    BYPASS_ELEVATION_CHECK.store(true, Ordering::Relaxed);
+}
+
+/// Returns whether this process was explicitly allowed to use an elevated daemon.
+pub fn bypass_safety_y_enabled() -> bool {
+    BYPASS_ELEVATION_CHECK.load(Ordering::Relaxed)
+}
+
 pub(crate) fn ensure_not_elevated() -> Result<()> {
+    if bypass_safety_y_enabled() {
+        return Ok(());
+    }
     let mut token = 0;
     if unsafe { OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token) } == 0 {
         return Err(io::Error::last_os_error()).context("failed to query daemon launcher token");

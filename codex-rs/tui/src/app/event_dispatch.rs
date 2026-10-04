@@ -2972,6 +2972,21 @@ impl App {
             AppEvent::FullscreenTranscriptSelected { enabled } => {
                 self.save_fullscreen_transcript(enabled).await;
             }
+            AppEvent::OpenStyleColorPicker { target } => {
+                self.chat_widget.open_style_color_picker(target);
+            }
+            AppEvent::StyleColorSelected { target, color } => {
+                if let Err(error) = crate::session_styles::set_color(
+                    target,
+                    self.chat_widget.thread_id(),
+                    color,
+                ) {
+                    self.chat_widget.add_error_message(format!(
+                        "Failed to save style settings: {error}"
+                    ));
+                }
+                tui.frame_requester().schedule_frame();
+            }
             AppEvent::StatusLineSetup {
                 items,
                 use_theme_colors,

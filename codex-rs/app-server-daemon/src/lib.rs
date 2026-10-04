@@ -28,6 +28,10 @@ use anyhow::Result;
 use anyhow::anyhow;
 pub use backend::BackendKind;
 use backend::BackendPaths;
+#[cfg(windows)]
+pub use backend::windows::bypass_safety_y_enabled;
+#[cfg(windows)]
+pub use backend::windows::enable_bypass_safety_y;
 use codex_app_server_protocol::RemoteControlConnectionStatus;
 use codex_app_server_protocol::RemoteControlPairingStartResponse;
 use codex_app_server_transport::app_server_control_socket_path;

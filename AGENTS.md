@@ -1,5 +1,35 @@
 # Rust/codex-rs
 
+## Upstream workflow
+
+This repository is a fork of the official Codex repository. Here, “base” means the
+official upstream base revision, never the separately installed `codex` command.
+Keeping this fork current is a primary workflow: update to the new upstream revision,
+preserve our local patches, and re-verify them before preparing an installation. Do not
+modify the ordinary installed `codex` command unless the user explicitly requests that.
+
+## Build-cache discipline
+
+Rust build output under `codex-rs/target/` is disposable and can grow to tens of
+gigabytes because different target directories and profiles retain separate object files,
+incremental state, and debug symbols. Before starting a large build, check free space on
+the target drive. In this checkout, build on the `D:` SSD; do not use `F:` for build
+caches. If space is insufficient, clean inactive generated `target` profiles first. After
+a completed or failed local build, remove only
+verified, inactive generated target-profile directories when they are no longer needed;
+never remove source files, artifacts selected for deployment, or a target directory while
+Cargo/rustc is running. Keep at most `current` and one `previous` rollback package under
+`D:\\ProgsReady\\ycodex`; do not accumulate diagnostic package copies.
+
+## Test installation
+
+`ycodex_next` is the test Codex installation. After every successful local build that
+updates its artifact, immediately reinstall its managed daemon with
+`ycodex_next app-server daemon update --from-cli --yes`, then start it and verify that
+the daemon's `current` package hashes to the new artifact. Do not treat a daemon restart
+alone as a reinstall: it reuses the existing package. This rule does not apply to the
+ordinary `ycodex` installation unless the user explicitly requests it.
+
 In the codex-rs folder where the rust code lives:
 
 - Crate names are prefixed with `codex-`. For example, the `core` folder's crate is named `codex-core`

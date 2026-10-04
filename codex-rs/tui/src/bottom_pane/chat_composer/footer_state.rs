@@ -218,6 +218,7 @@ pub(super) struct FooterState {
     pub(super) status_line_enabled: bool,
     pub(super) side_conversation_context_label: Option<String>,
     pub(super) active_agent_label: Option<String>,
+    pub(super) session_guid: Option<String>,
     pub(super) external_editor_key: Option<ShortcutHint>,
     pub(super) show_transcript_key: Option<ShortcutHint>,
     pub(super) show_warnings_key: Option<ShortcutHint>,

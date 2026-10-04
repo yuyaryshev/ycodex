@@ -282,6 +282,8 @@ impl LocalStdioServerLauncher {
             let mut command = Command::new(&resolved_program);
             command.current_dir(&cwd).envs(&envs).args(&args);
             command.process_mode(ProcessMode::NewGroup);
+            #[cfg(windows)]
+            command.hide_window();
             // MCP uses only stdio; select Explicit to exclude unrelated
             // orchestrator descriptors from the server and commands it launches.
             // Descriptor allowlisting is Unix-only. Windows can still inherit unrelated

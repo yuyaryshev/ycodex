@@ -527,6 +527,7 @@ fn parent_owned_command_is_allowed(command: SlashCommand, args: &str) -> bool {
                 | SlashCommand::Title
                 | SlashCommand::Statusline
                 | SlashCommand::Theme
+                | SlashCommand::Styles
                 | SlashCommand::Pets
                 | SlashCommand::Ps
                 | SlashCommand::Stop
@@ -760,6 +761,7 @@ impl ChatComposer {
                 status_line_enabled: false,
                 side_conversation_context_label: None,
                 active_agent_label: None,
+                session_guid: None,
                 external_editor_key: default_keymap
                     .primary_hint(KeymapContext::Global, "open_external_editor"),
                 warning_notice_area: std::cell::Cell::default(),
@@ -1107,6 +1109,8 @@ impl ChatComposer {
         log_id: u64,
         entry_count: usize,
     ) {
+        crate::session_styles::set_active_thread(Some(thread_id));
+        self.footer.session_guid = Some(thread_id.to_string());
         self.history.set_metadata(thread_id, log_id, entry_count);
     }
 
@@ -3857,7 +3861,17 @@ impl ChatComposer {
                     .toggle_voice_key
                     .filter(|_| self.voice_command_enabled && !self.side_conversation_active),
             },
-            active_agent_label: self.footer.active_agent_label.clone(),
+            active_agent_label: match (
+                self.footer.active_agent_label.as_deref(),
+                self.footer.session_guid.as_deref(),
+            ) {
+                (Some(agent), Some(session_guid)) => {
+                    Some(format!("{agent} · Session ID: {session_guid}"))
+                }
+                (Some(agent), None) => Some(agent.to_string()),
+                (None, Some(session_guid)) => Some(format!("Session ID: {session_guid}")),
+                (None, None) => None,
+            },
         }
     }
 

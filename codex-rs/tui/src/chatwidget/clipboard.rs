@@ -10,6 +10,17 @@ pub(super) enum PendingCopy {
 }
 
 impl ChatWidget {
+    pub(crate) fn paste_text(&mut self) {
+        match paste_text_from_clipboard() {
+            Ok(text) if !text.is_empty() => self.handle_paste(text),
+            Ok(_) => self.add_info_message(
+                "Clipboard does not contain text.".into(),
+                /*hint*/ None,
+            ),
+            Err(error) => self.add_error_message(format!("Failed to paste text: {error}")),
+        }
+    }
+
     pub(crate) fn paste_image(&mut self) {
         match paste_image_to_temp_png() {
             Ok((path, info)) => {

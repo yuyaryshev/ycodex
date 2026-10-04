@@ -2350,12 +2350,29 @@ async fn slash_keymap_invalid_args_show_usage() {
 #[tokio::test]
 async fn copy_shortcut_can_be_remapped() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
-    for modifiers in [KeyModifiers::CONTROL, KeyModifiers::ALT] {
+    #[cfg(windows)]
+    {
         assert_matches!(
-            chat.handle_key_event(KeyEvent::new(KeyCode::Char('v'), modifiers)),
+            chat.handle_key_event(KeyEvent::new(KeyCode::Char('v'), KeyModifiers::CONTROL)),
+            crate::chatwidget::KeyEventAction::PasteText
+        );
+        assert_matches!(
+            chat.handle_key_event(KeyEvent::new(KeyCode::Insert, KeyModifiers::SHIFT)),
+            crate::chatwidget::KeyEventAction::PasteText
+        );
+        assert_matches!(
+            chat.handle_key_event(KeyEvent::new(
+                KeyCode::Char('v'),
+                KeyModifiers::CONTROL | KeyModifiers::ALT,
+            )),
             crate::chatwidget::KeyEventAction::PasteImage
         );
     }
+    #[cfg(not(windows))]
+    assert_matches!(
+        chat.handle_key_event(KeyEvent::new(KeyCode::Char('v'), KeyModifiers::CONTROL)),
+        crate::chatwidget::KeyEventAction::PasteImage
+    );
     let mut keymap_config = chat.config_ref().tui_keymap.clone();
     keymap_config.global.copy = Some(codex_config::types::KeybindingsSpec::One(
         codex_config::types::KeybindingSpec("alt-v".to_string()),

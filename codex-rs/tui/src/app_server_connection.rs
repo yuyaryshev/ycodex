@@ -27,19 +27,24 @@ pub(crate) async fn connect(target: &AppServerTarget) -> color_eyre::Result<AppS
             // Revalidate at the real connection, not just the earlier discovery probe.
             let (socket_path, _directory) =
                 codex_uds::validate_private_socket_path(socket_path.as_path())?;
-            let app_server =
-                RemoteAppServerClient::connect_local_daemon(RemoteAppServerConnectArgs {
-                    endpoint: RemoteAppServerEndpoint::UnixSocket {
-                        socket_path: AbsolutePathBuf::from_absolute_path_checked(socket_path)?,
-                    },
-                    client_name: "codex-tui".to_string(),
-                    client_version: env!("CARGO_PKG_VERSION").to_string(),
-                    experimental_api: true,
-                    mcp_server_openai_form_elicitation: false,
-                    opt_out_notification_methods: Vec::new(),
-                    channel_capacity: DEFAULT_IN_PROCESS_CHANNEL_CAPACITY,
-                })
-                .await?;
+            let args = RemoteAppServerConnectArgs {
+                endpoint: RemoteAppServerEndpoint::UnixSocket {
+                    socket_path: AbsolutePathBuf::from_absolute_path_checked(socket_path)?,
+                },
+                client_name: "codex-tui".to_string(),
+                client_version: env!("CARGO_PKG_VERSION").to_string(),
+                experimental_api: true,
+                mcp_server_openai_form_elicitation: false,
+                opt_out_notification_methods: Vec::new(),
+                channel_capacity: DEFAULT_IN_PROCESS_CHANNEL_CAPACITY,
+            };
+            let app_server = if codex_app_server_daemon::bypass_safety_y_enabled() {
+                // The flag is an explicit opt-in to an elevated daemon. Keep the socket
+                // directory validation above, but skip the default non-elevated peer check.
+                RemoteAppServerClient::connect(args).await?
+            } else {
+                RemoteAppServerClient::connect_local_daemon(args).await?
+            };
             Ok(AppServerClient::Remote(app_server))
         }
         AppServerTarget::LocalDaemon { endpoint, .. } | AppServerTarget::Remote { endpoint } => {

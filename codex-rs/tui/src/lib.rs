@@ -196,6 +196,7 @@ mod session_queue_commands;
 mod session_resume;
 mod session_start;
 mod session_state;
+mod session_styles;
 mod shortcut_help;
 mod skills_helpers;
 mod slash_command;

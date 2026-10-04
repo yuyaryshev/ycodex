@@ -136,7 +136,7 @@ pub(super) async fn compatibility_warning(
         }
         let client = app_server_connection::connect(target)
             .await
-            .map_err(|_| "could not connect to check daemon feature settings".to_string())?;
+            .map_err(|err| format!("could not connect to check daemon feature settings: {err}"))?;
         let (tx, rx) = tokio::sync::oneshot::channel();
         crate::experimental_features::fetch(
             client.request_handle(),

@@ -46,6 +46,19 @@ pub struct PastedImageInfo {
     pub encoded_format: EncodedImageFormat, // Always PNG for now.
 }
 
+/// Read plain text from the system clipboard.
+#[cfg(not(target_os = "android"))]
+pub(crate) fn paste_text() -> Result<String, String> {
+    tracing::debug!("attempting clipboard text read");
+    let mut clipboard = arboard::Clipboard::new().map_err(|error| error.to_string())?;
+    clipboard.get_text().map_err(|error| error.to_string())
+}
+
+#[cfg(target_os = "android")]
+pub(crate) fn paste_text() -> Result<String, String> {
+    Err("clipboard text paste is unsupported on Android".into())
+}
+
 /// Capture image from system clipboard, encode to PNG, and return bytes + info.
 #[cfg(not(target_os = "android"))]
 pub fn paste_image_as_png() -> Result<(Vec<u8>, PastedImageInfo), PasteImageError> {

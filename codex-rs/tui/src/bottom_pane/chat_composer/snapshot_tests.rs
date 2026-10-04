@@ -7,10 +7,26 @@ use crate::key_hint;
 use crate::key_hint::ShortcutHint;
 use crate::keymap::RuntimeKeymap;
 use crate::render::renderable::Renderable;
+use codex_protocol::ThreadId;
 use crossterm::event::KeyCode;
 use pretty_assertions::assert_eq;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
+
+#[test]
+fn footer_displays_session_guid() {
+    let session_id =
+        ThreadId::from_string("00000000-0000-0000-0000-000000000123").expect("valid session ID");
+
+    snapshot_composer_state_with_width(
+        "footer_session_guid",
+        /*width*/ 80,
+        /*enhanced_keys_supported*/ false,
+        |composer| {
+            composer.set_history_metadata(session_id, /*log_id*/ 1, /*entry_count*/ 0);
+        },
+    );
+}
 
 #[test]
 fn shortcut_footer_displays_configured_chords() {

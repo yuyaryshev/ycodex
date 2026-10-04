@@ -9,6 +9,9 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
+
 use codex_code_mode_protocol::CellId;
 use codex_code_mode_protocol::CodeModeSessionCellExecutionLimits;
 use codex_code_mode_protocol::CodeModeSessionDelegate;
@@ -162,6 +165,10 @@ impl Connection {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .kill_on_drop(true);
+        #[cfg(windows)]
+        command
+            .as_std_mut()
+            .creation_flags(windows_sys::Win32::System::Threading::CREATE_NO_WINDOW);
         scrub_non_inheritable_env_vars(command.as_std_mut());
         let mut child = command.spawn().map_err(|error| ConnectionError::Spawn {
             host_program: host_program.to_path_buf(),

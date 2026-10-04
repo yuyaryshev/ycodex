@@ -1245,6 +1245,7 @@ impl Tui {
 
             terminal.draw_with_size(screen_size, |frame| {
                 draw_fn(frame);
+                crate::session_styles::apply(frame.buffer_mut());
             })
         })??;
         Ok(())

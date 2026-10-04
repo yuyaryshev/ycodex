@@ -18,6 +18,7 @@ impl App {
                     .copy(text, CopyFormat::Markdown, tui.frame_requester());
                 self.chat_widget.show_copy_result("last message", result);
             }
+            KeyEventAction::PasteText => self.chat_widget.paste_text(),
             KeyEventAction::PasteImage => {
                 // Finish paste before the next key, but never wait on the copy worker's lock.
                 if tui.clipboard.is_busy() {

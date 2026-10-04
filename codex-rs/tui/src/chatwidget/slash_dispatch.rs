@@ -550,6 +550,7 @@ impl ChatWidget {
             SlashCommand::Theme => {
                 self.open_theme_picker();
             }
+            SlashCommand::Styles => self.open_styles_picker(),
             SlashCommand::Pets => {
                 self.open_pets_picker();
             }
@@ -1277,6 +1278,7 @@ impl ChatWidget {
             | SlashCommand::Title
             | SlashCommand::Statusline
             | SlashCommand::Theme
+            | SlashCommand::Styles
             | SlashCommand::Tui
             | SlashCommand::Pets => QueueDrain::Stop,
         }

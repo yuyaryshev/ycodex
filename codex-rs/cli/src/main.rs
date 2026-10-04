@@ -1031,6 +1031,10 @@ async fn cli_main(
         mut interactive,
         subcommand,
     } = MultitoolCli::parse();
+    #[cfg(windows)]
+    if interactive.bypass_safety_y {
+        codex_app_server_daemon::enable_bypass_safety_y();
+    }
     // Retain the launch target through TUI exit, even if a launcher changes selection.
     let daemon_cli_executable = arg0_paths
         .codex_self_exe
@@ -2380,6 +2384,10 @@ async fn run_interactive_tui(
     remote_auth_token_env: Option<String>,
     arg0_paths: Arg0DispatchPaths,
 ) -> std::io::Result<AppExitInfo> {
+    #[cfg(windows)]
+    if interactive.bypass_safety_y {
+        codex_app_server_daemon::enable_bypass_safety_y();
+    }
     if interactive.no_daemon {
         if interactive.agents_overview {
             return Ok(AppExitInfo::fatal(
@@ -2654,6 +2662,7 @@ fn merge_interactive_cli_flags(interactive: &mut TuiCli, subcommand_cli: TuiCli)
         web_search,
         no_alt_screen,
         no_daemon,
+        bypass_safety_y,
         prompt,
         mut config_overrides,
         ..
@@ -2675,6 +2684,7 @@ fn merge_interactive_cli_flags(interactive: &mut TuiCli, subcommand_cli: TuiCli)
     }
     interactive.no_alt_screen |= no_alt_screen;
     interactive.no_daemon |= no_daemon;
+    interactive.bypass_safety_y |= bypass_safety_y;
     if strict_config {
         interactive.strict_config = true;
     }
@@ -4054,6 +4064,17 @@ mod tests {
         );
 
         assert!(interactive.bypass_hook_trust);
+        assert!(interactive.resume_picker);
+        assert!(!interactive.resume_last);
+        assert_eq!(interactive.resume_session_id, None);
+    }
+
+    #[test]
+    fn resume_merges_bypass_safety_y_flag() {
+        let interactive =
+            finalize_resume_from_args(["codex", "resume", "--bypass-safety-y"].as_ref());
+
+        assert!(interactive.bypass_safety_y);
         assert!(interactive.resume_picker);
         assert!(!interactive.resume_last);
         assert_eq!(interactive.resume_session_id, None);

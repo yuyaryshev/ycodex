@@ -147,6 +147,8 @@ async fn spawn_process_with_stdin_mode(
     let _ = inherited_fds;
 
     let mut command = Command::new(program);
+    #[cfg(windows)]
+    command.hide_window();
     #[cfg(unix)]
     if let Some(arg0) = arg0 {
         command.arg0(arg0);

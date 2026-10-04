@@ -84,6 +84,10 @@ pub struct Cli {
     #[arg(long)]
     pub no_daemon: bool,
 
+    /// Windows only: allow the shared background server to start from an elevated terminal.
+    #[arg(long)]
+    pub bypass_safety_y: bool,
+
     #[clap(skip)]
     pub config_overrides: CliConfigOverrides,
 }
