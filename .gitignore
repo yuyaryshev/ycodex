@@ -57,6 +57,10 @@ yarn-error.log*
 # package
 *.tgz
 
+# local Codex package artifacts and ad-hoc smoke-test output
+/artifacts/
+/response.md
+
 # ci
 .vercel/
 .netlify/
