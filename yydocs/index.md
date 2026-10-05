@@ -1,25 +1,24 @@
 # Библиотека встроенных prompt-шаблонов
 
-Эта библиотека фиксирует **55** статических текстов, которые ycodex может передавать модели: файловые шаблоны и пять коротких fallback-инструкций, определённых непосредственно в Rust.
+Для gpt-5.6-sol, gpt-5.6-terra и gpt-5.6-luna Codex берёт общий instructions_template непосредственно из models-manager/models.json. Это **не** protocol default.md. Точный текущий текст находится в первой строке таблицы.
 
-Не включены пользовательские сообщения, AGENTS.md, навыки, плагины, данные MCP, тексты тестов и контекстные фрагменты, которые целиком формируются из внешних данных. Они не являются зашитыми prompt-значениями.
+Таблица ниже содержит актуальные runtime-шаблоны, fallback-шаблоны и инструкции для моделей, присутствующих в текущем каталоге. Пользовательские сообщения, AGENTS.md, навыки, плагины, данные MCP, тесты и полностью динамически сформированный контекст не включены.
 
-Каждый документ содержит точный bundled-шаблон на момент ревизии 351abb571, ссылку на первичный исходник и место основного рендера. В ряде случаев модельный каталог может заменить bundled-текст до отправки модели.
+## Актуальные prompt-шаблоны
 
 | Категория | Название | Когда используется | Файл |
 | --- | --- | --- | --- |
+| Current model instructions | gpt-5.6-sol, gpt-5.6-terra, gpt-5.6-luna, codex-auto-review | При создании сессии с одной из перечисленных моделей, если пользователь не задал собственные base instructions. | [открыть](promts/catalog-gpt-5-6-family-instructions.md) |
+| Current model instructions | gpt-6.1-sol | При создании сессии с одной из перечисленных моделей, если пользователь не задал собственные base instructions. | [открыть](promts/catalog-gpt-6-1-sol-instructions.md) |
+| Current model instructions | gpt-6-astra | При создании сессии с одной из перечисленных моделей, если пользователь не задал собственные base instructions. | [открыть](promts/catalog-gpt-6-astra-instructions.md) |
+| Current model instructions | gpt-6-luna | При создании сессии с одной из перечисленных моделей, если пользователь не задал собственные base instructions. | [открыть](promts/catalog-gpt-6-luna-instructions.md) |
+| Current model instructions | gpt-6-sol | При создании сессии с одной из перечисленных моделей, если пользователь не задал собственные base instructions. | [открыть](promts/catalog-gpt-6-sol-instructions.md) |
+| Current model instructions | gpt-daybreak-blue-latest | При создании сессии с одной из перечисленных моделей, если пользователь не задал собственные base instructions. | [открыть](promts/catalog-gpt-daybreak-blue-instructions.md) |
+| Current model instructions | gpt-daybreak-red-latest | При создании сессии с одной из перечисленных моделей, если пользователь не задал собственные base instructions. | [открыть](promts/catalog-gpt-daybreak-red-instructions.md) |
 | Collaboration | default | Когда выбран соответствующий режим collaboration: Default либо Plan. | [открыть](promts/collaboration-mode-templates-templates-default-md.md) |
 | Collaboration | plan | Когда выбран соответствующий режим collaboration: Default либо Plan. | [открыть](promts/collaboration-mode-templates-templates-plan-md.md) |
-| Model instructions | gpt-5.1-codex-max_prompt | Как базовые model instructions для соответствующей модели или её fallback-конфигурации. | [открыть](promts/core-gpt-5-1-codex-max-prompt-md.md) |
-| Model instructions | gpt_5_1_prompt | Как базовые model instructions для соответствующей модели или её fallback-конфигурации. | [открыть](promts/core-gpt-5-1-prompt-md.md) |
-| Model instructions | gpt-5.2-codex_prompt | Как базовые model instructions для соответствующей модели или её fallback-конфигурации. | [открыть](promts/core-gpt-5-2-codex-prompt-md.md) |
-| Model instructions | gpt_5_2_prompt | Как базовые model instructions для соответствующей модели или её fallback-конфигурации. | [открыть](promts/core-gpt-5-2-prompt-md.md) |
-| Model instructions | gpt_5_codex_prompt | Как базовые model instructions для соответствующей модели или её fallback-конфигурации. | [открыть](promts/core-gpt-5-codex-prompt-md.md) |
 | Agents | orchestrator | Для встроенной роли оркестратора при многоагентной работе. | [открыть](promts/core-templates-agents-orchestrator-md.md) |
 | Collaboration | experimental_prompt | В экспериментальном многоагентном сценарии collaboration. | [открыть](promts/core-templates-collab-experimental-prompt-md.md) |
-| Model instructions | gpt-5.2-codex_instructions_template | При построении системного контекста выбранной модели. | [открыть](promts/core-templates-model-instructions-gpt-5-2-codex-instructions-template-md.md) |
-| Model instructions | gpt-5.2-codex_friendly | При выборе соответствующей personality для gpt-5.2-codex. | [открыть](promts/core-templates-personalities-gpt-5-2-codex-friendly-md.md) |
-| Model instructions | gpt-5.2-codex_pragmatic | При выборе соответствующей personality для gpt-5.2-codex. | [открыть](promts/core-templates-personalities-gpt-5-2-codex-pragmatic-md.md) |
 | Review | history_message_completed | При запуске review-подзадачи или сохранении её результата в истории. | [открыть](promts/core-templates-review-history-message-completed-md.md) |
 | Review | history_message_interrupted | При запуске review-подзадачи или сохранении её результата в истории. | [открыть](promts/core-templates-review-history-message-interrupted-md.md) |
 | Tool descriptions | request_plugin_install_description | При описании инструментов поиска и установки plugin для модели. | [открыть](promts/core-templates-search-tool-request-plugin-install-description-md.md) |
@@ -41,7 +40,7 @@
 | Memories | stage_one_input_v2 | Во внутреннем конвейере извлечения и консолидации долговременной памяти. | [открыть](promts/memories-write-templates-memories-stage-one-input-v2-md.md) |
 | Memories | stage_one_system | Во внутреннем конвейере извлечения и консолидации долговременной памяти. | [открыть](promts/memories-write-templates-memories-stage-one-system-md.md) |
 | Memories | stage_one_system_v2 | Во внутреннем конвейере извлечения и консолидации долговременной памяти. | [открыть](promts/memories-write-templates-memories-stage-one-system-v2-md.md) |
-| Model instructions | prompt | Как базовые model instructions для соответствующей модели или её fallback-конфигурации. | [открыть](promts/models-manager-prompt-md.md) |
+| Fallback instructions | prompt | Как базовые model instructions для соответствующей модели или её fallback-конфигурации. | [открыть](promts/models-manager-prompt-md.md) |
 | Runtime | prompt | При сжатии истории диалога и формировании её итогового summary. | [открыть](promts/prompts-templates-compact-prompt-md.md) |
 | Runtime | summary_prefix | При сжатии истории диалога и формировании её итогового summary. | [открыть](promts/prompts-templates-compact-summary-prefix-md.md) |
 | Guardian | classifier_instructions | Во время автоматической проверки разрешений (Guardian) или классификации действия. | [открыть](promts/prompts-templates-guardian-classifier-instructions-md.md) |
@@ -62,5 +61,25 @@
 | Review | exit_interrupted | При запуске review-подзадачи или сохранении её результата в истории. | [открыть](promts/prompts-templates-review-exit-interrupted-xml.md) |
 | Review | exit_success | При запуске review-подзадачи или сохранении её результата в истории. | [открыть](promts/prompts-templates-review-exit-success-xml.md) |
 | Review | rubric | При запуске review-подзадачи или сохранении её результата в истории. | [открыть](promts/prompts-templates-review-rubric-md.md) |
-| Model instructions | default | Как базовые model instructions для соответствующей модели или её fallback-конфигурации. | [открыть](promts/protocol-src-prompts-base-instructions-default-md.md) |
+| Fallback instructions | default | Как базовые model instructions для соответствующей модели или её fallback-конфигурации. | [открыть](promts/protocol-src-prompts-base-instructions-default-md.md) |
+
+## Legacy: модели и шаблоны прошлых поколений
+
+Эти файлы сохранены в исходном дереве, но модели GPT-5, GPT-5.1 и GPT-5.2 отсутствуют в текущем models-manager/models.json. GPT-5.5 ещё есть в каталоге, но помечена как older model и имеет upgrade до GPT-6 Sol.
+
+| Категория | Название | Когда использовался | Файл |
+| --- | --- | --- | --- |
+| Other | gpt-5.5 | При создании сессии с одной из перечисленных моделей, если пользователь не задал собственные base instructions. | [открыть](promts/catalog-gpt-5-5-instructions.md) |
+| Other | gpt-5.1-codex-max_prompt | Как базовые model instructions для соответствующей модели или её fallback-конфигурации. | [открыть](promts/core-gpt-5-1-codex-max-prompt-md.md) |
+| Other | gpt_5_1_prompt | Как базовые model instructions для соответствующей модели или её fallback-конфигурации. | [открыть](promts/core-gpt-5-1-prompt-md.md) |
+| Other | gpt-5.2-codex_prompt | Как базовые model instructions для соответствующей модели или её fallback-конфигурации. | [открыть](promts/core-gpt-5-2-codex-prompt-md.md) |
+| Other | gpt_5_2_prompt | Как базовые model instructions для соответствующей модели или её fallback-конфигурации. | [открыть](promts/core-gpt-5-2-prompt-md.md) |
+| Other | gpt_5_codex_prompt | Как базовые model instructions для соответствующей модели или её fallback-конфигурации. | [открыть](promts/core-gpt-5-codex-prompt-md.md) |
+| Other | gpt-5.2-codex_instructions_template | При построении системного контекста выбранной модели. | [открыть](promts/core-templates-model-instructions-gpt-5-2-codex-instructions-template-md.md) |
+| Other | gpt-5.2-codex_friendly | При выборе соответствующей personality для gpt-5.2-codex. | [открыть](promts/core-templates-personalities-gpt-5-2-codex-friendly-md.md) |
+| Other | gpt-5.2-codex_pragmatic | При выборе соответствующей personality для gpt-5.2-codex. | [открыть](promts/core-templates-personalities-gpt-5-2-codex-pragmatic-md.md) |
+
+## Принцип выбора базовой инструкции
+
+При создании сессии Codex вызывает render_model_instructions для выбранной модели. Он использует instructions_template из model_messages. Если template отсутствует, результат пуст; отдельные fallback-значения применяются в других путях создания ModelInfo. Поэтому не следует считать default.md общим prompt для GPT-5.6.
 
