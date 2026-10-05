@@ -1,0 +1,285 @@
+digraph claude_code_turn {
+	bgcolor=white compound=true fontname="DejaVu Sans Bold" fontsize=22 label="Claude Code — архитектура одного turn с явными циклами" labelloc=t newrank=true nodesep=0.28 pad=0.22 rankdir=TB ranksep=0.42 splines=polyline
+	node [color="#5D6D7E" fontname="DejaVu Sans" fontsize=10.2 margin="0.15,0.08" penwidth=1.0 shape=box style="rounded,filled"]
+	edge [arrowsize=0.72 color="#566573" fontname="DejaVu Sans" fontsize=9.2]
+	user [label="Пользовательский ввод
+(user prompt)" fillcolor="#D6EAF8"]
+	turn_start [label="START TURN" fillcolor="#D4EFDF" shape=oval]
+	subgraph cluster_turn {
+		color="#2E86C1" fontname="DejaVu Sans Bold" fontsize=16 label=TURN penwidth=2 style=rounded
+		subgraph cluster_prompt_hooks {
+			color="#85C1E9" fontname="DejaVu Sans Bold" fontsize=12 label="A. UserPromptSubmit hook pipeline" style=rounded
+			prompt_hooks_init [label="Найти matching UserPromptSubmit hooks" fillcolor="#EBF5FB"]
+			prompt_hook_next [label="Есть следующий hook?" fillcolor="#D6EAF8" shape=diamond]
+			prompt_hook_run [label="Выполнить hook
+(side effect / block / additional context)" fillcolor="#EBF5FB"]
+			prompt_blocked [label="Prompt blocked?" fillcolor="#FADBD8" shape=diamond]
+			append_prompt [label="Добавить prompt + hook-added context
+в conversation/session state" fillcolor="#EBF5FB"]
+		}
+		subgraph cluster_agent {
+			color="#5DADE2" fontname="DejaVu Sans Bold" fontsize=13 label="B. OUTER AGENT LOOP — Messages API request → tools/results → следующий request" penwidth=1.6 style="rounded,dashed"
+			iter_start [label="Начало agent iteration" fillcolor="#EAF2F8"]
+			subgraph cluster_context {
+				color="#58D68D" fontname="DejaVu Sans Bold" fontsize=12 label="B1. Сборка контекста запроса" style=rounded
+				context_state [label="Собрать model-visible context:
+• system prompt / режим
+• CLAUDE.md / rules / auto-memory
+• conversation history
+• skill descriptions / loaded skills
+• MCP/tool metadata
+• cwd / environment state" fillcolor="#EAFAF1"]
+				lazy_context [label="При навигации в новые поддиректории:
+nested CLAUDE.md / rules могут
+дозагружаться в context" fillcolor="#EAFAF1"]
+				compact_check [label="Context близок к auto-compact threshold?" fillcolor="#FCF3CF" shape=diamond]
+				subgraph cluster_compact {
+					color="#F5B041" fontname="DejaVu Sans Bold" fontsize=11 label="B1a. COMPACTION LOOP / boundary" style="rounded,dashed"
+					precompact_init [label="Найти matching PreCompact hooks" fillcolor="#FEF9E7"]
+					precompact_next [label="Есть следующий hook?" fillcolor="#FCF3CF" shape=diamond]
+					precompact_run [label="Выполнить PreCompact hook" fillcolor="#FEF9E7"]
+					compact [label="Compact:
+суммаризировать историю /
+освободить context window" fillcolor="#FDEBD0"]
+				}
+				build_request [label="Build Anthropic Messages request
+(system + messages + tools + model options)" fillcolor="#D5F5E3"]
+			}
+			subgraph cluster_stream {
+				color="#AF7AC5" fontname="DejaVu Sans Bold" fontsize=12 label="B2. Один Messages API request + streaming event loop" style=rounded
+				send_request [label="Send request к Claude model" fillcolor="#F5EEF8"]
+				read_event [label="Read next stream event" fillcolor="#F4ECF7"]
+				event_type [label="Тип event?" fillcolor="#E8DAEF" shape=diamond]
+				block_start [label="content_block_start:
+создать accumulator блока
+(text / thinking / tool_use / server tool)" fillcolor="#F5EEF8"]
+				block_delta [label="content_block_delta:
+добавить text/thinking/input_json delta
++ stream в UI" fillcolor="#F5EEF8"]
+				block_stop [label="content_block_stop:
+finalize content block" fillcolor="#F5EEF8"]
+				message_stop [label="message_stop:
+finalize AssistantMessage
++ stop_reason" fillcolor="#D2B4DE"]
+				stream_error [label="transport/provider error" fillcolor="#FADBD8"]
+			}
+			subgraph cluster_stop_reason {
+				color="#EC7063" fontname="DejaVu Sans Bold" fontsize=12 label="B3. Ветвление по stop_reason / содержимому AssistantMessage" style=rounded
+				stop_reason [label="stop_reason / response state?" fillcolor="#FADBD8" shape=diamond]
+				pause_turn [label="pause_turn / server-side tool continuation:
+продолжить API workflow
+с returned assistant content" fillcolor="#FDEDEC"]
+				max_tokens [label="max_tokens / truncated output:
+retry/continue policy
+(особенно если tool_use incomplete)" fillcolor="#FDEDEC"]
+				refusal [label="refusal / terminal refusal" fillcolor="#FDEDEC"]
+				tool_blocks_init [label="Извлечь все client tool_use blocks
+(id, name, input)" fillcolor="#FDEDEC"]
+				final_candidate [label="Нет client tool_use:
+assistant text = candidate final response" fillcolor="#FDEDEC"]
+			}
+			subgraph cluster_tools {
+				color="#48C9B0" fontname="DejaVu Sans Bold" fontsize=12 label="C. LOOP ПО tool_use blocks текущего AssistantMessage" penwidth=1.4 style=rounded
+				tool_next [label="Есть следующий tool_use?" fillcolor="#D1F2EB" shape=diamond]
+				tool_resolve [label="Resolve built-in / MCP / Agent tool" fillcolor="#E8F8F5"]
+				subgraph cluster_pretool {
+					color="#17A589" fontname="DejaVu Sans Bold" fontsize=11 label="C1. PreToolUse hook loop" style="rounded,dashed"
+					pretool_init [label="Найти matching PreToolUse hooks" fillcolor="#E8F8F5"]
+					pretool_next [label="Есть следующий hook?" fillcolor="#D1F2EB" shape=diamond]
+					pretool_run [label="Выполнить hook:
+может deny / добавить context /
+модифицировать tool input (где поддержано)" fillcolor="#E8F8F5"]
+					pretool_denied [label="Hook denied?" fillcolor="#FADBD8" shape=diamond]
+				}
+				subgraph cluster_permissions {
+					color="#F4D03F" fontname="DejaVu Sans Bold" fontsize=11 label="C2. Permission evaluation (после PreToolUse)" style=rounded
+					deny_rules [label="1. Match deny rules?" fillcolor="#FCF3CF" shape=diamond]
+					ask_rules [label="2. Match explicit ask rules /
+requires interaction?" fillcolor="#FCF3CF" shape=diamond]
+					mode_eval [label="3. Apply permission mode:
+default / dontAsk / acceptEdits /
+plan / bypassPermissions / auto" fillcolor="#FEF9E7"]
+					mode_resolved [label="Mode решил вызов?" fillcolor="#FCF3CF" shape=diamond]
+					allow_rules [label="4. Match allow rules /
+self-approved read-only action?" fillcolor="#FCF3CF" shape=diamond]
+					permission_request [label="5. PermissionRequest hook /
+canUseTool / UI confirmation /
+auto classifier path" fillcolor="#FEF9E7"]
+					permission_granted [label="Разрешено?" fillcolor="#FCF3CF" shape=diamond]
+				}
+				tool_denied_result [label="Создать tool_result(is_error=true)
+permission/hook denied" fillcolor="#FDEBD0"]
+				tool_kind [label="Тип tool?" fillcolor="#D1F2EB" shape=diamond]
+				local_exec [label="Выполнить local tool:
+Read/Edit/Write/Bash/Glob/Grep/…
+с текущими sandbox/FS/network constraints" fillcolor="#EBF5FB"]
+				mcp_exec [label="Выполнить MCP tool
+через MCP server/connector" fillcolor="#EBF5FB"]
+				subgraph cluster_subagent {
+					color="#7FB3D5" fontname="DejaVu Sans Bold" fontsize=11 label="C3. Agent/Subagent branch — отдельный изолированный agent loop" style="rounded,dashed"
+					subagent_start [label="Создать subagent context:
+• отдельный system prompt
+• переданный prompt
+• selected skills
+• CLAUDE.md/git state (зависит от agent type)
+• без полного parent conversation history" fillcolor="#EBF5FB"]
+					subagent_loop [label="SUBAGENT AGENT LOOP
+model → tools → tool_results → model
+(может выполняться foreground/background)" fillcolor="#D6EAF8"]
+					subagent_done [label="Subagent завершён:
+вернуть summary/result parent agent" fillcolor="#EBF5FB"]
+				}
+				tool_exec_result [label="Tool execution result
+(success / error / content)" fillcolor="#EBF5FB"]
+				subgraph cluster_posttool {
+					color="#1ABC9C" fontname="DejaVu Sans Bold" fontsize=11 label="C4. PostToolUse / PostToolUseFailure hook loop" style="rounded,dashed"
+					posthook_init [label="Выбрать PostToolUse или PostToolUseFailure hooks" fillcolor="#E8F8F5"]
+					posthook_next [label="Есть следующий hook?" fillcolor="#D1F2EB" shape=diamond]
+					posthook_run [label="Выполнить hook
+(side effect / additional context / validation)" fillcolor="#E8F8F5"]
+				}
+				append_tool_result [label="Append `user` message с tool_result blocks
+(tool_use_id ↔ result, is_error при ошибке)" fillcolor="#D6EAF8"]
+			}
+			subgraph cluster_finish {
+				color="#AAB7B8" fontname="DejaVu Sans Bold" fontsize=12 label="D. Continuation / Stop lifecycle" style=rounded
+				tool_batch_done [label="Все tool_use текущего response обработаны" fillcolor="#F8F9F9"]
+				steer_check [label="Есть новый user input / queued instruction /
+background result, который надо включить?" fillcolor="#F2F4F4" shape=diamond]
+				append_steer [label="Добавить новый input/result
+в conversation state" fillcolor="#F8F9F9"]
+				continue_agent [label="Следующая model iteration
+с tool_results / новым input" fillcolor="#EAF2F8"]
+				subgraph cluster_stop_hooks {
+					color="#95A5A6" fontname="DejaVu Sans Bold" fontsize=11 label="D1. Stop hook loop (когда Claude собирается завершить response)" style="rounded,dashed"
+					stop_hooks_init [label="Найти matching Stop hooks" fillcolor="#F8F9F9"]
+					stop_hook_next [label="Есть следующий hook?" fillcolor="#F2F4F4" shape=diamond]
+					stop_hook_run [label="Выполнить Stop hook" fillcolor="#F8F9F9"]
+					stop_blocked [label="Stop заблокирован /
+требуется continuation?" fillcolor="#F2F4F4" shape=diamond]
+				}
+			}
+		}
+	}
+	end_turn [label="END TURN
+показать final assistant response" fillcolor="#D5F5E3" shape=oval]
+	abort_turn [label="ABORT / ERROR / INTERRUPT" fillcolor="#F5B7B1" shape=oval]
+	blocked_prompt [label="TURN BLOCKED
+UserPromptSubmit hook" fillcolor="#F5B7B1" shape=oval]
+	refused_end [label="END TURN
+refusal" fillcolor="#FDEDEC" shape=oval]
+	subgraph cluster_notes {
+		color="#BFC9CA" fontname="DejaVu Sans Bold" fontsize=11 label="Ключевые инварианты Claude Code" style="rounded,dashed"
+		note1 [label="API protocol: assistant `tool_use`
+→ client executes tool
+→ user `tool_result`
+→ следующий Messages request" fillcolor="#FBFCFC"]
+		note2 [label="Permission order существенно важен:
+PreToolUse hooks → deny → ask → mode → allow → runtime approval" fillcolor="#FBFCFC"]
+		note3 [label="Несколько tool_use blocks могут быть в одном response;
+eligible read-only tools/subagents могут выполняться конкурентно." fillcolor="#FBFCFC"]
+		note4 [label="Auto-compaction — отдельная boundary:
+после compact agent продолжает с summarized context." fillcolor="#FBFCFC"]
+		note5 [label="Subagent имеет изолированный context;
+parent получает обратно result/summary, а не полный transcript subagent." fillcolor="#FBFCFC"]
+	}
+	user -> turn_start
+	turn_start -> prompt_hooks_init
+	prompt_hooks_init -> prompt_hook_next
+	prompt_hook_next -> prompt_hook_run [label="да"]
+	prompt_hook_run -> prompt_blocked
+	prompt_blocked -> blocked_prompt [label="да"]
+	prompt_blocked -> prompt_hook_next [label="нет / следующий hook"]
+	prompt_hook_next -> append_prompt [label="нет"]
+	append_prompt -> iter_start
+	iter_start -> context_state
+	context_state -> lazy_context
+	lazy_context -> compact_check
+	compact_check -> precompact_init [label="да"]
+	precompact_init -> precompact_next
+	precompact_next -> precompact_run [label="да"]
+	precompact_run -> precompact_next [label="следующий hook"]
+	precompact_next -> compact [label="нет"]
+	compact -> context_state [label="пересобрать context"]
+	compact_check -> build_request [label="нет"]
+	build_request -> send_request
+	send_request -> read_event
+	read_event -> event_type
+	event_type -> block_start [label=block_start]
+	event_type -> block_delta [label=block_delta]
+	event_type -> block_stop [label=block_stop]
+	event_type -> message_stop [label=message_stop]
+	event_type -> stream_error [label=error]
+	block_start -> read_event [label="следующий event"]
+	block_delta -> read_event [label="следующий event"]
+	block_stop -> read_event [label="следующий event"]
+	stream_error -> abort_turn
+	message_stop -> stop_reason
+	stop_reason -> tool_blocks_init [label=tool_use]
+	stop_reason -> pause_turn [label=pause_turn]
+	stop_reason -> max_tokens [label=max_tokens]
+	stop_reason -> refusal [label=refusal]
+	stop_reason -> final_candidate [label="end_turn / stop_sequence / no tool_use"]
+	pause_turn -> build_request [label="continuation request"]
+	max_tokens -> build_request [label="retry / continue"]
+	refusal -> refused_end
+	tool_blocks_init -> tool_next
+	tool_next -> tool_resolve [label="да"]
+	tool_resolve -> pretool_init
+	pretool_init -> pretool_next
+	pretool_next -> pretool_run [label="да"]
+	pretool_run -> pretool_denied
+	pretool_denied -> tool_denied_result [label="да"]
+	pretool_denied -> pretool_next [label="нет / следующий hook"]
+	pretool_next -> deny_rules [label="нет"]
+	deny_rules -> tool_denied_result [label="да"]
+	deny_rules -> ask_rules [label="нет"]
+	ask_rules -> permission_request [label="да"]
+	ask_rules -> mode_eval [label="нет"]
+	mode_eval -> mode_resolved
+	mode_resolved -> tool_kind [label=allow]
+	mode_resolved -> tool_denied_result [label=deny]
+	mode_resolved -> allow_rules [label="не решил"]
+	allow_rules -> tool_kind [label="да"]
+	allow_rules -> permission_request [label="нет"]
+	permission_request -> permission_granted
+	permission_granted -> tool_kind [label="да"]
+	permission_granted -> tool_denied_result [label="нет"]
+	tool_kind -> local_exec [label="built-in local"]
+	tool_kind -> mcp_exec [label=MCP]
+	tool_kind -> subagent_start [label="Agent/subagent"]
+	local_exec -> tool_exec_result
+	mcp_exec -> tool_exec_result
+	subagent_start -> subagent_loop
+	subagent_loop -> subagent_done
+	subagent_done -> tool_exec_result
+	tool_exec_result -> posthook_init
+	tool_denied_result -> append_tool_result
+	posthook_init -> posthook_next
+	posthook_next -> posthook_run [label="да"]
+	posthook_run -> posthook_next [label="следующий hook"]
+	posthook_next -> append_tool_result [label="нет"]
+	append_tool_result -> tool_next [label="следующий tool_use"]
+	tool_next -> tool_batch_done [label="нет"]
+	tool_batch_done -> steer_check
+	steer_check -> append_steer [label="да"]
+	append_steer -> continue_agent
+	steer_check -> continue_agent [label="нет"]
+	continue_agent -> iter_start [label="OUTER LOOP"]
+	final_candidate -> stop_hooks_init
+	stop_hooks_init -> stop_hook_next
+	stop_hook_next -> stop_hook_run [label="да"]
+	stop_hook_run -> stop_hook_next [label="следующий hook"]
+	stop_hook_next -> stop_blocked [label="нет"]
+	stop_blocked -> continue_agent [label="да"]
+	stop_blocked -> end_turn [label="нет"]
+	note1 -> note2 [style=invis]
+	note2 -> note3 [style=invis]
+	note3 -> note4 [style=invis]
+	note4 -> note5 [style=invis]
+	tool_blocks_init -> note1 [arrowhead=none color="#BFC9CA" style=dashed]
+	deny_rules -> note2 [arrowhead=none color="#BFC9CA" style=dashed]
+	tool_next -> note3 [arrowhead=none color="#BFC9CA" style=dashed]
+	compact -> note4 [arrowhead=none color="#BFC9CA" style=dashed]
+	subagent_done -> note5 [arrowhead=none color="#BFC9CA" style=dashed]
+}

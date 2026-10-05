@@ -1,0 +1,218 @@
+digraph codex_turn_v2 {
+	bgcolor=white compound=true fontname="DejaVu Sans Bold" fontsize=22 label="Codex Turn — архитектура с явными вложенными циклами" labelloc=t newrank=true nodesep=0.28 pad=0.22 rankdir=TB ranksep=0.42 splines=polyline
+	node [color="#5D6D7E" fontname="DejaVu Sans" fontsize=10.5 margin="0.15,0.08" penwidth=1.0 shape=box style="rounded,filled"]
+	edge [arrowsize=0.75 color="#566573" fontname="DejaVu Sans" fontsize=9.5]
+	user [label="Пользовательский ввод
+(user message)" fillcolor="#D6EAF8"]
+	append_user [label="Append user message
+в canonical typed history" fillcolor="#EBF5FB"]
+	turn_start [label="START / RESUME TURN" fillcolor="#D4EFDF" shape=oval]
+	subgraph cluster_turn {
+		color="#2E86C1" fontname="DejaVu Sans Bold" fontsize=16 label=TURN penwidth=2 style=rounded
+		subgraph cluster_agent_loop {
+			color="#5DADE2" fontname="DejaVu Sans Bold" fontsize=13 label="A. OUTER AGENT LOOP — повторяется до terminal assistant message / interrupt / fatal error" penwidth=1.6 style="rounded,dashed"
+			iter_start [label="Начало sampling-итерации" fillcolor="#EAF2F8"]
+			step_ctx [label="Capture / refresh StepContext
+(request-scoped snapshot)" fillcolor="#EAF2F8"]
+			dynamic_state [label="Актуальное динамическое состояние:
+• cwd / shell
+• sandbox policy
+• approval policy
+• enabled tools / MCP
+• repo / filesystem-derived state
+• config / model settings" fillcolor="#F8F9F9"]
+			subgraph cluster_context {
+				color="#58D68D" fontname="DejaVu Sans Bold" fontsize=12 label="B. Сборка model-visible context" style=rounded
+				instr_init [label="Resolve applicable instructions
+(в т.ч. project instructions / AGENTS*)" fillcolor="#EAFAF1"]
+				scope_next [label="Есть следующий instruction scope
+(root → … → cwd)?" fillcolor="#D5F5E3" shape=diamond]
+				scope_read [label="Прочитать / применить инструкции scope
+(или взять из cache)" fillcolor="#EAFAF1"]
+				hist_collect [label="Собрать canonical typed history
++ env context + текущий user input" fillcolor="#EAFAF1"]
+				tools_collect [label="Собрать schemas доступных tools
+(shell / editing / plan / MCP / web / …)" fillcolor="#EAFAF1"]
+				budget [label="Context budget / thresholds
+превышены?" fillcolor="#FCF3CF" shape=diamond]
+				compact [label="COMPACTION
+сжать model-visible history /
+refresh context window" fillcolor="#FDEBD0"]
+				build_req [label="Build Responses request
+(instructions + tools + input/history)" fillcolor="#D5F5E3"]
+			}
+			subgraph cluster_sampling {
+				color="#AF7AC5" fontname="DejaVu Sans Bold" fontsize=12 label="C. Один sampling request + внутренний Responses stream loop" style=rounded
+				send_req [label="Send sampling request
+к Responses API / model" fillcolor="#F5EEF8"]
+				read_event [label="Read next response event" fillcolor="#F4ECF7"]
+				event_type [label="Тип event?" fillcolor="#E8DAEF" shape=diamond]
+				delta_event [label="delta / partial item:
+обновить accumulator
++ publish streaming event клиенту" fillcolor="#F5EEF8"]
+				item_done_event [label="output_item.done:
+finalize completed output item" fillcolor="#F5EEF8"]
+				completed_event [label="response.completed
+sampling request завершён" fillcolor="#D2B4DE"]
+				stream_error [label="terminal stream / provider error" fillcolor="#FADBD8"]
+			}
+			subgraph cluster_items {
+				color="#EC7063" fontname="DejaVu Sans Bold" fontsize=12 label="D. Loop по completed output items одного response" style=rounded
+				item_loop_init [label="Инициализировать обход
+completed output items" fillcolor="#FDEDEC"]
+				next_item [label="Есть следующий output item?" fillcolor="#FADBD8" shape=diamond]
+				classify_item [label="Классифицировать item" fillcolor="#FADBD8" shape=diamond]
+				reasoning_item [label="reasoning / metadata:
+record / publish" fillcolor="#FDEDEC"]
+				message_item [label="assistant message:
+record как terminal candidate" fillcolor="#FDEDEC"]
+				function_item [label="function_call:
+record + enqueue tool call
+(call_id, name, args)" fillcolor="#FDEDEC"]
+				other_item [label="прочий supported item:
+record / normalize" fillcolor="#FDEDEC"]
+				tools_queued [label="Есть queued tool calls?" fillcolor="#F5B7B1" shape=diamond]
+			}
+			subgraph cluster_tool_loop {
+				color="#48C9B0" fontname="DejaVu Sans Bold" fontsize=12 label="E. Loop по tool calls из текущего model response" style=rounded
+				tool_loop_init [label="Инициализировать обход
+queued tool calls" fillcolor="#E8F8F5"]
+				next_tool [label="Есть следующий tool call?" fillcolor="#D1F2EB" shape=diamond]
+				resolve_tool [label="Resolve tool / ToolRouter" fillcolor="#E8F8F5"]
+				is_shell [label="Tool = shell?" fillcolor="#D1F2EB" shape=diamond]
+				subgraph cluster_shell_segments {
+					color="#17A589" fontname="DejaVu Sans Bold" fontsize=11 label="E1. Shell-specific loop: разбор и policy check по сегментам команды" style="rounded,dashed"
+					shell_parse [label="Parse / canonicalize shell command
+и разбить на policy-relevant segments
+(|, &&, ||, ;, $(), …)" fillcolor="#E8F8F5"]
+					seg_next [label="Есть следующий segment?" fillcolor="#D1F2EB" shape=diamond]
+					seg_policy [label="Evaluate segment policy:
+allow / ask / deny
++ требуемые permissions" fillcolor="#E8F8F5"]
+					seg_accumulate [label="Обновить агрегированное
+policy decision для shell call" fillcolor="#E8F8F5"]
+				}
+				non_shell_policy [label="Evaluate policy
+для non-shell tool" fillcolor="#E8F8F5"]
+				policy_result [label="Итог policy?" fillcolor="#FCF3CF" shape=diamond]
+				subgraph cluster_approval {
+					color="#F4D03F" fontname="DejaVu Sans Bold" fontsize=11 label="E2. Approval / escalation branch" style=rounded
+					ask_approval [label="Request approval / escalation
+(user / reviewer path)" fillcolor="#FEF9E7"]
+					approved [label="Approved?" fillcolor="#FCF3CF" shape=diamond]
+				}
+				deny_result [label="Сформировать tool result:
+permission denied / rejected" fillcolor="#FDEBD0"]
+				sandbox [label="Определить effective sandbox /
+разрешённые capabilities" fillcolor="#EBF5FB"]
+				execute [label="Execute tool
+в sandbox/runtime" fillcolor="#EBF5FB"]
+				collect_result [label="Собрать result:
+stdout/stderr, diff/files,
+exit status / structured output / error" fillcolor="#EBF5FB"]
+				append_tool_output [label="Append function_call_output
+по call_id в canonical history" fillcolor="#D6EAF8"]
+			}
+			subgraph cluster_continue {
+				color="#AAB7B8" fontname="DejaVu Sans Bold" fontsize=12 label="F. Continuation decision перед следующей sampling-итерацией" style=rounded
+				pending_input [label="Есть pending / steered
+user input?" fillcolor="#F2F4F4" shape=diamond]
+				append_pending [label="Append pending input
+в canonical history" fillcolor="#F8F9F9"]
+				terminal_candidate [label="Есть terminal assistant message
+и нет причины продолжать?" fillcolor="#F2F4F4" shape=diamond]
+				next_iter [label="Продолжить outer agent loop
+→ новая sampling-итерация" fillcolor="#EAF2F8"]
+			}
+		}
+	}
+	end_turn [label="END TURN
+вернуть final assistant response" fillcolor="#D5F5E3" shape=oval]
+	abort_turn [label="ABORT / ERROR / INTERRUPT" fillcolor="#F5B7B1" shape=oval]
+	subgraph cluster_legend {
+		color="#BFC9CA" fontname="DejaVu Sans Bold" fontsize=11 label="Архитектурные инварианты" style="rounded,dashed"
+		legend1 [label="Canonical Codex conversation state
+≠ transport/session state Responses API" fillcolor="#FBFCFC"]
+		legend2 [label="Sandbox policy и approval policy
+— независимые оси" fillcolor="#FBFCFC"]
+		legend3 [label="Denied tool call обычно становится observation:
+function_call_output(error), а turn может продолжиться" fillcolor="#FBFCFC"]
+		legend4 [label="Terminal condition normal path:
+нет tool continuation + есть final assistant message" fillcolor="#FBFCFC"]
+	}
+	user -> append_user
+	append_user -> turn_start
+	turn_start -> iter_start
+	iter_start -> step_ctx
+	step_ctx -> dynamic_state
+	dynamic_state -> instr_init
+	instr_init -> scope_next
+	scope_next -> scope_read [label="да"]
+	scope_read -> scope_next [label="следующий scope"]
+	scope_next -> hist_collect [label="нет"]
+	hist_collect -> tools_collect
+	tools_collect -> budget
+	budget -> compact [label="да"]
+	compact -> hist_collect [label="пересобрать context"]
+	budget -> build_req [label="нет"]
+	build_req -> send_req
+	send_req -> read_event
+	read_event -> event_type
+	event_type -> delta_event [label="delta / partial"]
+	delta_event -> read_event [label="следующий event"]
+	event_type -> item_done_event [label="output_item.done"]
+	item_done_event -> read_event [label="следующий event"]
+	event_type -> completed_event [label="response.completed"]
+	event_type -> stream_error [label="terminal error"]
+	stream_error -> abort_turn
+	completed_event -> item_loop_init
+	item_loop_init -> next_item
+	next_item -> classify_item [label="да"]
+	classify_item -> reasoning_item [label=reasoning]
+	classify_item -> message_item [label=message]
+	classify_item -> function_item [label=function_call]
+	classify_item -> other_item [label=other]
+	reasoning_item -> next_item [label="следующий item"]
+	message_item -> next_item [label="следующий item"]
+	function_item -> next_item [label="следующий item"]
+	other_item -> next_item [label="следующий item"]
+	next_item -> tools_queued [label="нет"]
+	tools_queued -> tool_loop_init [label="да"]
+	tool_loop_init -> next_tool
+	next_tool -> resolve_tool [label="да"]
+	resolve_tool -> is_shell
+	is_shell -> shell_parse [label="да"]
+	is_shell -> non_shell_policy [label="нет"]
+	shell_parse -> seg_next
+	seg_next -> seg_policy [label="да"]
+	seg_policy -> seg_accumulate
+	seg_accumulate -> seg_next [label="следующий segment"]
+	seg_next -> policy_result [label="нет"]
+	non_shell_policy -> policy_result
+	policy_result -> sandbox [label=allow]
+	policy_result -> ask_approval [label=ask]
+	policy_result -> deny_result [label=deny]
+	ask_approval -> approved
+	approved -> sandbox [label="да"]
+	approved -> deny_result [label="нет"]
+	sandbox -> execute
+	execute -> collect_result
+	collect_result -> append_tool_output
+	deny_result -> append_tool_output
+	append_tool_output -> next_tool [label="следующий tool call"]
+	next_tool -> pending_input [label="нет"]
+	tools_queued -> pending_input [label="нет"]
+	pending_input -> append_pending [label="да"]
+	append_pending -> terminal_candidate
+	pending_input -> terminal_candidate [label="нет"]
+	terminal_candidate -> end_turn [label="да"]
+	terminal_candidate -> next_iter [label="нет"]
+	next_iter -> iter_start [label="OUTER LOOP"]
+	legend1 -> legend2 [style=invis]
+	legend2 -> legend3 [style=invis]
+	legend3 -> legend4 [style=invis]
+	step_ctx -> legend1 [arrowhead=none color="#BFC9CA" style=dashed]
+	policy_result -> legend2 [arrowhead=none color="#BFC9CA" style=dashed]
+	deny_result -> legend3 [arrowhead=none color="#BFC9CA" style=dashed]
+	terminal_candidate -> legend4 [arrowhead=none color="#BFC9CA" style=dashed]
+}
